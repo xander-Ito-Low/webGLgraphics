@@ -1,0 +1,359 @@
+﻿<html>
+	<head>
+		<title>CM20219 – Coursework 2 – WebGL</title>
+        <meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		<style>
+			body { margin: 0; overflow: hidden; }
+			canvas { width: 100%; height: 100%;
+        }
+		</style>
+	</head>
+	<body>
+        <script src="three.js"></script>
+        <script src="OBJloader.js"></script>
+		<script>
+            "use strict"; // https://stackoverflow.com/q/1335851/72470
+
+            // Global variables that are available in all functions.
+            // Note: You can add your own here, e.g. to store the rendering mode.
+            var camera, scene,renderer,mesh,mesh2 = new THREE.Group(),meshStore,meshStore2 = new THREE.Geometry(),center;
+            var orbitAbout = new THREE.Vector3(0, 0, 0);
+            
+            //Global variables for rotation values
+            var xSpeed = 0,ySpeed = 0,zSpeed = 0;
+            var  isMouseDown = false,onMouseDownPosition = new THREE.Vector2(),
+			radius,onMouseDownTheta, onMouseDownPhi, theta = 45,phi = 45,pos;
+            init();
+			animate();
+            // Listen for keyboard events, to react to them.
+            // Note: there are also other event listeners, e.g. for mouse events.
+            document.addEventListener('keydown', handleKeyDown);
+
+            // Scene initialisation. This function is only run once, at the very beginning.
+            function init()
+            {
+                scene = new THREE.Scene();
+                // Set up the camera, move it to (3, 4, 5) and look at the origin (0, 0, 0).
+                camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+                camera.position.set(3, 4, 5);
+                center = new THREE.Vector3(0,0,0);
+                camera.lookAt(center);
+                // Draw a helper grid in the x-z plane (note: y is up).
+                scene.add(new THREE.GridHelper(10, 20, 0xffffff));
+
+                // TO DO: Draw a cube (requirement 1).
+                //load a texture and then map it to the cube
+                const texture0 = new THREE.TextureLoader().load('textures/face1.jpg');
+                const texture1 = new THREE.TextureLoader().load('textures/face2.jpg');
+                const texture2 = new THREE.TextureLoader().load('textures/face3.jpg');
+                const texture3 = new THREE.TextureLoader().load('textures/face4.jpg');
+                const texture4 = new THREE.TextureLoader().load('textures/face5.jpg');
+                const texture5 = new THREE.TextureLoader().load('textures/face6.jpg');
+
+                var geometry = new THREE.BoxGeometry( 2, 2, 2);
+                //  Faces of the cube
+                var cubeMaterial = [
+                new THREE.MeshPhongMaterial({map:texture0}),
+                new THREE.MeshPhongMaterial({map:texture1}),
+                new THREE.MeshPhongMaterial({map:texture2}),
+                new THREE.MeshPhongMaterial({map:texture3}),
+                new THREE.MeshPhongMaterial({map:texture4}),
+                new THREE.MeshPhongMaterial({map:texture5}),
+                ];
+
+                mesh = new THREE.Mesh(geometry,cubeMaterial);
+                mesh.castShadow = true;
+                meshStore = mesh.geometry;
+                scene.add(mesh);
+                // TO DO: Visualise the axes of the global coordinate system (requirment 2).
+               var materiallineX = new THREE.LineBasicMaterial({color: 0xff0000});
+               var linex = new THREE.Geometry();
+               linex.vertices.push(new THREE.Vector3(-5,0,0));
+               linex.vertices.push(new THREE.Vector3(5,0,0));
+               var line1 = new THREE.Line(linex,materiallineX );
+               scene.add(line1);
+
+               var materiallineY = new THREE.LineBasicMaterial({color:"green"});
+               var liney = new THREE.Geometry();
+               liney.vertices.push(new THREE.Vector3(0,-5,0));
+               liney.vertices.push(new THREE.Vector3(0,5,0));
+               var line2 = new THREE.Line(liney,materiallineY);
+               scene.add(line2);
+
+               var materiallineZ = new THREE.LineBasicMaterial({color:"blue"});
+               var linez = new THREE.Geometry();
+               linez.vertices.push(new THREE.Vector3(0,0,-5));
+               linez.vertices.push(new THREE.Vector3(0,0,5));
+               var line3 = new THREE.Line(linez,materiallineZ);
+               scene.add(line3);
+               
+
+                // TO DO: add more complex lighting for 'face' rendering mode (requirement 4).
+                var light = new THREE.DirectionalLight(0xffffff);
+                light.castShadow = true; // default false
+                scene.add( light );
+                light.position.set(6,10,10);
+
+                 var ambient = new THREE.AmbientLight(0xffffff,0.2);
+                 scene.add(ambient);
+
+                //create plane and resize
+                var geometry = new THREE.PlaneGeometry(100,100);
+                var material = new THREE.MeshPhongMaterial(
+                {color:"grey", side: THREE.DoubleSide} );
+                var plane = new THREE.Mesh( geometry, material );
+                scene.add( plane );
+                //translate,rotate until in a good position
+                plane.rotation.x = 90 * Math.PI / 180;	// add this
+                plane.position.y = -10;
+                plane.receiveShadow = true;
+
+                // Set up the Web GL renderer.
+                renderer = new THREE.WebGLRenderer({ antialias: true });
+                renderer.shadowMap.enabled = true;
+                //renderer.shadowMap.type = THREE.BasicShadowMap;
+				renderer.setPixelRatio(window.devicePixelRatio); // HiDPI/retina rendering
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                document.body.appendChild(renderer.domElement);
+
+                //Add event listeners
+                window.addEventListener('resize', handleResize, false);
+                window.addEventListener('mousemove',mouseMovement,false);
+                window.addEventListener('wheel',mouseWheel,false);
+                window.addEventListener('mousedown',onDocumentMouseDown,false);
+                window.addEventListener('mouseup',onDocumentMouseUp,false);
+            }
+
+            // Handle resizing of the browser window.
+            function handleResize()
+            {
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+				renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+
+            //Translation accross the Z-axis
+            function mouseWheel( event ) {
+                var movement = event.deltaY * 0.01
+                camera.translateZ(movement);
+                orbitAbout.z+= movement;
+            }
+
+            //Move mouse to move the camera x, y axis
+            function mouseMovement(event){   
+                //Orbit around a fixed point
+                if ( isMouseDown ) {
+                    pos = camera.position.sub(orbitAbout);
+                    console.log(orbitAbout);
+                    radius = pos.length();
+                    console.log(radius);
+                    //camera position subtract
+                    theta = - ( ( event.clientX - onMouseDownPosition.x ) * 0.5 ) + onMouseDownTheta;
+                    phi = ( ( event.clientY - onMouseDownPosition.y ) * 0.5 ) + onMouseDownPhi;
+                    
+                    
+                    //cap phi so no unexpected behaviour
+                    phi = Math.min(80,Math.max(-80, phi));
+                    camera.position.x = radius * Math.sin( theta *Math.PI / 180) *Math.cos( phi * Math.PI / 180 );
+                    camera.position.y = radius * Math.sin( phi *Math.PI / 180 );
+                    camera.position.z = radius * Math.cos( theta*Math.PI / 180 ) * Math.cos( phi * Math.PI / 180 );
+                    camera.translateX(center.x);
+                    camera.translateY(center.y);
+                    camera.translateZ(center.z);
+                    camera.position.add(orbitAbout);
+                    camera.lookAt(orbitAbout);
+                }
+
+                else{
+                    var movement1= event.movementX;
+                    var movement2 = event.movementY;
+                    camera.translateX(movement1 * 0.01);
+                    camera.translateY(movement2 * 0.01);
+                    orbitAbout.x += movement1*0.01;
+                    orbitAbout.y +=movement2*0.01;
+                }
+            }
+
+
+			function onDocumentMouseDown( event ) {
+                event.preventDefault();
+                isMouseDown = true;
+                onMouseDownPhi = phi;
+                onMouseDownTheta = theta;
+                onMouseDownPosition.x = event.clientX;
+                onMouseDownPosition.y = event.clientY;
+                //calculate radius from center
+                radius =  Math.sqrt(Math.pow(camera.position.x,2)+Math.pow(camera.position.y,2)+Math.pow(camera.position.z,2));
+                camera.lookAt(center);
+            }
+
+            // set boolen for mouse down
+            function onDocumentMouseUp(event){
+                isMouseDown = false;
+            } 
+
+            // Animation loop function. This function is called whenever an update is required.
+			 function animate() {
+                mesh.rotation.x+=xSpeed;
+                mesh.rotation.y+=ySpeed;
+                mesh.rotation.z+=zSpeed;
+                if(mesh2!=null){
+                    mesh2.rotation.x+=xSpeed;
+                    mesh2.rotation.y+=ySpeed;
+                    mesh2.rotation.z+=zSpeed;
+                }
+                requestAnimationFrame(animate);
+                renderer.render(scene, camera);
+            };
+
+            //changing rotations
+            function changeSpeed(x,y,z){
+                xSpeed = x;
+                ySpeed = y;
+                zSpeed = z;
+            }
+
+            //Function that sets mesh to new mode
+            function initiate(event,mStore,obj){
+                //new mesh object that will be set to the mesh
+                var m;
+                    scene.remove(obj);
+                    var rotationX = obj.rotation.x;
+                    var rotationY = obj.rotation.y;
+                    var rotationZ = obj.rotation.z;
+                var geo = mStore.clone();
+
+                //edge rendering
+                if(event.keyCode==69){
+                    var edges = new THREE.EdgesGeometry(geo);
+                    m = new THREE.LineSegments( edges, new THREE.LineBasicMaterial( { color: 0xffffff } ) );
+                    m.castShadow = true;
+                    m.visible = obj.visible;
+                }
+
+                //faces
+                else if(event.keyCode==70){
+                    var material = new THREE.MeshPhongMaterial({color: 0x00ff00 });
+                    m = new THREE.Mesh(geo,material);
+                    m.castShadow = true;
+                    m.visible = obj.visible;
+                }
+
+                //verties
+                else{
+                    m = new THREE.Points(geo,new THREE.PointsMaterial( { size: 2.5, sizeAttenuation: false }));
+                    m.visible = obj.visible;
+                }
+                
+                //set rotation
+                captureRotation(rotationX,rotationY,rotationZ,m);
+                    scene.add(m);
+                //has to be returned or the mesh model will not change because it is PBV
+                return m;
+            }
+
+            //Get rotation from moment that mode changes so that when the mode changes the rotation won't be affected
+            function captureRotation(rotationX,rotationY,rotationZ,m){
+                m.rotation.x+=rotationX;
+                m.rotation.y+=rotationY;
+                m.rotation.z+=rotationZ;
+            }
+
+            // Handle keyboard presses.
+            function handleKeyDown(event)
+            {
+                switch (event.keyCode)
+                {
+                    
+                    //Make the cube invisible
+                    case 65:
+                    mesh.visible = true;
+                    break;
+                    
+                    //make cube visible again
+                    case 82:
+                    mesh.visible = false;
+                    break;
+                    
+                    // Render modes.
+                    case 70: // f = face
+                        mesh = initiate(event,meshStore,mesh);
+                        if(mesh2!=null){
+                           mesh2 =  initiate(event,meshStore2,mesh2);
+                        }
+                    break;
+
+                    case 69: // e = edge
+                        mesh = initiate(event,meshStore,mesh);
+                        if(mesh2!=null){
+                            mesh2 = initiate(event,meshStore2,mesh2);
+                        }
+                    
+                    break;
+
+                    case 76:
+                       //Load the rabbit
+                        var objLoader = new THREE.OBJLoader();
+                        objLoader.load("bunny-5000.obj",function(object){
+                            //traverse children
+                            object.traverse(function(child){
+                                if(child instanceof THREE.Mesh){
+                                   //So the bunny fits exactly inside the cube
+                                    var box = new THREE.Box3().setFromObject(object);
+                                    var maximum = box.max;
+                                    var minimum = box.min;
+                                    var difference = maximum.sub(minimum);
+                                    var maxVal = Math.max(difference.x,difference.y,difference.z);
+                                    var scale = 2/maxVal;
+                                    child.scale.set(scale,scale,scale);
+                                    box.setFromObject(child);
+                                    var vector = center.sub(box.getCenter());
+                                    //apply transformations on the geometry
+                                    var a = new THREE.Geometry().fromBufferGeometry(child.geometry);
+                                    a = a.scale(scale,scale,scale);
+                                    a = a.applyMatrix( new THREE.Matrix4().makeTranslation(vector.x,vector.y,vector.z));
+                                    meshStore2.merge(a);
+                                }
+                                });
+                                var material = new THREE.MeshPhongMaterial({color:0x00ff00 });
+                                mesh2 = new THREE.Mesh(meshStore2,material);
+                                //want it to cast a shadow
+                                mesh2.castShadow = true;
+                                camera.lookAt(center);
+                                scene.add(mesh2);
+                        });
+                    break;
+
+                    case 86: // v = vertex
+                        mesh = initiate(event,meshStore,mesh);
+                        if(mesh2!=null){
+                            mesh2 = initiate(event,meshStore2,mesh2);
+                        }
+                     break;
+
+                     case 88:
+                        changeSpeed(0.01,0,0);
+                        break;
+                    
+                    case 89:
+                        changeSpeed(0,0.01,0);
+                        break;
+                    
+                    case 90:
+                        changeSpeed(0,0,0.01);
+                        break;
+                    
+                    case 83:
+                        changeSpeed(0,0,0);
+                        mesh.rotation.set(0, 0, 0);
+                        if(mesh2!=null){
+                            mesh2.rotation.set(0,0,0);
+                        }
+                        break;
+                    }
+                    
+                }
+		</script>
+	</body>
+</html>
